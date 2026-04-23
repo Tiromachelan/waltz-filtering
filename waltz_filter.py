@@ -1,33 +1,48 @@
 junction_catalog = {
     2: [
-        # L-junctions (Left arm, Right arm)
-        ("←", "→"),
-        ("→", "←"),
-        ("-", "→"),
-        ("←", "-"),
-        ("→", "+"),
-        ("+", "←"),
+        # L-JUNCTIONS
+        # Reading clockwise across the interior angle (< 180 degrees)
+        # Order: (Arm 1, Arm 2)
+        ("→", "←"),  # Outer boundary corner
+        ("←", "→"),  # Inner hole boundary
+        ("+", "→"),  
+        ("←", "+"),  
+        ("-", "←"),  
+        ("→", "-"),  
     ],
     
     3: [
-        # Arrow junctions (Left wing, Right wing, Stem)
+        # ARROW JUNCTIONS
+        # The angle > 180 degrees is at the top. 
+        # Reading clockwise: Right Wing, Stem, Left Wing
+        ("→", "+", "←"),  # Outer boundary (e.g., corner of a wedge)
+        ("+", "-", "+"),  # Inner corner (e.g., inside corner of a room)
+        ("-", "+", "-"),  # Exterior fold (e.g., looking at the spine of an open book)
+        
+        # Y-JUNCTIONS
+        # Three angles < 180 degrees. 
+        # Reading clockwise starting from ~2 o'clock: Top-Right Arm, Bottom Arm, Top-Left Arm
+        ("+", "+", "+"),  # Outer corner of a cube
+        ("-", "-", "-"),  # Inner corner of a box
+        ("→", "-", "←"),  # Boundary with one concave edge
+        ("-", "←", "→"),  # (Cyclic permutation of above)
+        ("←", "→", "-"),  # (Cyclic permutation of above)
+        
+        # T-JUNCTIONS
+        # Two collinear edges forming the top of the 'T', stem pointing down.
+        # Reading clockwise: Left Collinear, Right Collinear, Stem
+        # (Note: In Waltz filtering, collinear edges of a T-junction are always 
+        # boundaries going left-to-right, so they are always "→" then "←")
         ("→", "←", "+"),
-        ("-", "-", "+"),
-        ("+", "+", "-"),
-        
-        # Y-junctions (Left arm, Right arm, Bottom arm)
-        ("+", "+", "+"),
-        ("-", "-", "-"),
         ("→", "←", "-"),
-        ("←", "-", "→"),
-        ("-", "→", "←"),
-        
-        # T-junctions (Left collinear, Right collinear, Stem)
-        ("←", "→", "←"),
         ("→", "←", "→"),
-        ("←", "→", "+"),
-        ("→", "←", "-"),
+        ("→", "←", "←"),
     ],
+    
+    4: [
+        # K-junctions, X-junctions, or multi-crack junctions go here
+        # strictly following a clockwise sweep.
+    ]
 }
 
 edges = {
@@ -58,55 +73,55 @@ edges = {
 
 junctions = {
     "A": {
-        "edges": ["AB", "AA'"]
+        "edges": ["AA'", "AB"]
     },
     "B": {
-        "edges": ["BC", "BB'", "AB"]  # CW order
+        "edges": ["AB", "BC", "BB'"]  
     },
     "C": {
-        "edges": ["CC'", "BC"]
+        "edges": ["CC'", "BC"] 
     },
     "A'": {
-        "edges": ["B'A'", "A'J", "AA'"]
+        "edges": ["A'J", "B'A'", "AA'"]
     },
     "B'": {
-        "edges": ["C'B'", "B'A'", "BB'"]
+        "edges": ["B'A'", "C'B'", "BB'"]
     },
     "C'": {
-        "edges": ["HC'", "C'B'", "CC'"]
+        "edges": ["HC'", "CC'", "C'B'"]
     },
     "H": {
         "edges": ["HI_M", "HI_N", "HC'"]
     },
     "I": {
-        "edges": ["IF'", "HI_N", "HI_M"]
+        "edges": ["HI_N", "HI_M", "IF'"]
     },
     "J": {
-        "edges": ["A'J", "JK_T"]
+        "edges": ["JK_T", "A'J"]
     },
     "K": {
         "edges": ["D'K", "JK_T"]
     },
     "F'": {
-        "edges": ["IF'", "F'F", "F'G'"]
+        "edges": ["IF'", "F'G'", "F'F"]
     },
     "G'": {
-        "edges": ["F'G'", "G'G", "G'D'"]
+        "edges": ["F'G'", "G'D'", "G'G"]
     },
     "D'": {
-        "edges": ["G'D'", "D'D", "D'K"]
+        "edges": ["D'K", "D'D", "G'D'"]
     },
     "F": {
-        "edges": ["FE", "GF", "F'F"]
+        "edges": ["F'F", "FE", "GF"]
     },
     "G": {
-        "edges": ["GF", "GD", "G'G"]
+        "edges": ["G'G", "GF", "GD"]
     },
     "D": {
-        "edges": ["GD", "DE", "D'D"]
+        "edges": ["D'D", "GD", "DE"]
     },
     "E": {
-        "edges": ["FE", "DE"]
+        "edges": ["DE", "FE"]
     }
 }
 
