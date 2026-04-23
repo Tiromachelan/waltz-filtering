@@ -3,22 +3,18 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from itertools import product
-from math import atan2
-
-Point = tuple[int, int]
 
 
 @dataclass(frozen=True, slots=True)
 class Edge:
     edge_id: str
-    a: Point
-    b: Point
-    path: tuple[Point, ...]
+    a: str
+    b: str
 
 
 @dataclass(frozen=True, slots=True)
 class Junction:
-    point: Point
+    junction_id: str
     kind: str
     incident_edges: tuple[str, ...]
 
@@ -41,127 +37,77 @@ CATALOG: dict[str, tuple[dict[str, int], ...]] = {
 }
 
 
-# Hardcoded example "image" (1 = edge pixel, 0 = background)
-EXAMPLE_GRID: tuple[tuple[int, ...], ...] = (
-    (0, 0, 0, 0, 0, 0, 0),
-    (0, 0, 1, 0, 0, 0, 0),
-    (0, 0, 1, 0, 0, 0, 0),
-    (0, 1, 1, 1, 1, 1, 0),
-    (0, 0, 1, 0, 0, 0, 0),
-    (0, 0, 1, 0, 0, 0, 0),
-    (0, 0, 0, 0, 0, 0, 0),
-)
+# Hardcoded symbolic graph example.
+# Junction "edges" must be in cyclic order and each junction must provide explicit kind.
+EXAMPLE_EDGES: dict[str, tuple[str, str]] = {
+    "E1": ("J1", "J2"),
+    "E2": ("J1", "J3"),
+    "E3": ("J1", "J4"),
+    "E4": ("J2", "J5"),
+}
+
+EXAMPLE_JUNCTIONS: dict[str, dict[str, object]] = {
+    "J1": {"kind": "tee", "edges": ["E1", "E2", "E3"]},
+    "J2": {"kind": "line", "edges": ["E1", "E4"]},
+    "J3": {"kind": "endpoint", "edges": ["E2"]},
+    "J4": {"kind": "endpoint", "edges": ["E3"]},
+    "J5": {"kind": "endpoint", "edges": ["E4"]},
+}
 
 
-def neighbors4(point: Point, pixels: set[Point]) -> tuple[Point, ...]:
-    r, c = point
-    result: list[Point] = []
-    for dr, dc in ((-1, 0), (0, -1), (0, 1), (1, 0)):
-        candidate = (r + dr, c + dc)
-        if candidate in pixels:
-            result.append(candidate)
-    return tuple(sorted(result))
+def build_graph(
+    edges_input: dict[str, tuple[str, str]],
+    junctions_input: dict[str, dict[str, object]],
+) -> tuple[dict[str, Edge], dict[str, Junction]]:
+    edges = {
+        edge_id: Edge(edge_id=edge_id, a=endpoints[0], b=endpoints[1])
+        for edge_id, endpoints in edges_input.items()
+    }
+    junctions: dict[str, Junction] = {}
 
+    for junction_id, payload in junctions_input.items():
+        if "kind" not in payload:
+            raise ValueError(f"Junction {junction_id} is missing required 'kind'.")
+        if "edges" not in payload:
+            raise ValueError(f"Junction {junction_id} is missing required 'edges'.")
+        kind = payload["kind"]
+        incident_edges = payload["edges"]
+        if not isinstance(kind, str):
+            raise ValueError(f"Junction {junction_id} kind must be a string.")
+        if not isinstance(incident_edges, list) or not all(isinstance(e, str) for e in incident_edges):
+            raise ValueError(f"Junction {junction_id} edges must be a list[str].")
+        if not incident_edges:
+            raise ValueError(f"Junction {junction_id} must reference at least one edge.")
+        junctions[junction_id] = Junction(junction_id=junction_id, kind=kind, incident_edges=tuple(incident_edges))
 
-def is_vertex(point: Point, neighbors: tuple[Point, ...]) -> bool:
-    if len(neighbors) != 2:
-        return True
-    (r1, c1), (r2, c2) = neighbors
-    r0, c0 = point
-    d1 = (r1 - r0, c1 - c0)
-    d2 = (r2 - r0, c2 - c0)
-    return not (d1[0] == -d2[0] and d1[1] == -d2[1])
+    for edge_id, edge in edges.items():
+        if edge.a not in junctions or edge.b not in junctions:
+            raise ValueError(f"Edge {edge_id} references unknown junction(s): {edge.a}, {edge.b}.")
+        if edge_id not in junctions[edge.a].incident_edges or edge_id not in junctions[edge.b].incident_edges:
+            raise ValueError(
+                f"Edge {edge_id} must be listed in both endpoint junctions ({edge.a}, {edge.b})."
+            )
 
-
-def classify_junction(point: Point, edge_dirs: tuple[tuple[int, int], ...]) -> str:
-    degree = len(edge_dirs)
-    if degree == 1:
-        return "endpoint"
-    if degree == 2:
-        (dr1, dc1), (dr2, dc2) = edge_dirs
-        if dr1 == -dr2 and dc1 == -dc2:
-            return "line"
-        return "elbow"
-    if degree == 3:
-        return "tee"
-    if degree == 4:
-        return "cross"
-    return f"star_{degree}"
-
-
-def build_graph(grid: tuple[tuple[int, ...], ...]) -> tuple[dict[str, Edge], dict[Point, Junction]]:
-    pixels = {(r, c) for r, row in enumerate(grid) for c, value in enumerate(row) if value}
-    if not pixels:
-        return {}, {}
-
-    neighbor_map = {p: neighbors4(p, pixels) for p in pixels}
-    vertices = {p for p in pixels if is_vertex(p, neighbor_map[p])}
-
-    visited_steps: set[tuple[Point, Point]] = set()
-    edges: dict[str, Edge] = {}
-    edge_index = 1
-
-    for vertex in sorted(vertices):
-        for neighbor in neighbor_map[vertex]:
-            if (vertex, neighbor) in visited_steps:
-                continue
-
-            path = [vertex]
-            prev = vertex
-            current = neighbor
-            visited_steps.add((vertex, neighbor))
-            visited_steps.add((neighbor, vertex))
-
-            while current not in vertices:
-                path.append(current)
-                next_candidates = [n for n in neighbor_map[current] if n != prev]
-                if not next_candidates:
-                    break
-                nxt = next_candidates[0]
-                visited_steps.add((current, nxt))
-                visited_steps.add((nxt, current))
-                prev, current = current, nxt
-
-            if current not in vertices:
-                continue
-
-            path.append(current)
-            edge_id = f"E{edge_index:02d}"
-            edge_index += 1
-            edges[edge_id] = Edge(edge_id=edge_id, a=path[0], b=path[-1], path=tuple(path))
-
-    vertex_to_edges: dict[Point, list[str]] = {v: [] for v in vertices}
-    for edge in edges.values():
-        vertex_to_edges[edge.a].append(edge.edge_id)
-        vertex_to_edges[edge.b].append(edge.edge_id)
-
-    junctions: dict[Point, Junction] = {}
-    for vertex in sorted(vertices):
-        edge_and_angles: list[tuple[str, float, tuple[int, int]]] = []
-        for edge_id in vertex_to_edges[vertex]:
+    for junction_id, junction in junctions.items():
+        for edge_id in junction.incident_edges:
+            if edge_id not in edges:
+                raise ValueError(f"Junction {junction_id} references unknown edge {edge_id}.")
             edge = edges[edge_id]
-            next_point = edge.path[1] if vertex == edge.a else edge.path[-2]
-            dr = next_point[0] - vertex[0]
-            dc = next_point[1] - vertex[1]
-            angle = atan2(dr, dc)
-            edge_and_angles.append((edge_id, angle, (dr, dc)))
-        edge_and_angles.sort(key=lambda item: item[1])
-        incident_edges = tuple(item[0] for item in edge_and_angles)
-        edge_dirs = tuple(item[2] for item in edge_and_angles)
-        junctions[vertex] = Junction(point=vertex, kind=classify_junction(vertex, edge_dirs), incident_edges=incident_edges)
+            if junction_id != edge.a and junction_id != edge.b:
+                raise ValueError(f"Junction {junction_id} lists edge {edge_id} but is not an endpoint of that edge.")
 
     return edges, junctions
 
 
-def mark_at_junction(edge: Edge, label: str, junction_point: Point) -> str:
+def mark_at_junction(edge: Edge, label: str, junction_id: str) -> str:
     if label == "convex":
         return "+"
     if label == "concave":
         return "-"
     if label == "occluding_a_to_b":
-        return "out" if junction_point == edge.a else "in"
+        return "out" if junction_id == edge.a else "in"
     if label == "occluding_b_to_a":
-        return "out" if junction_point == edge.b else "in"
+        return "out" if junction_id == edge.b else "in"
     raise ValueError(f"Unknown label: {label}")
 
 
@@ -200,19 +146,19 @@ def value_has_support(
         marks = ["" for _ in junction.incident_edges]
         for eid, label in labels_by_edge.items():
             position = positions[eid]
-            marks[position] = mark_at_junction(edges[eid], label, junction.point)
+            marks[position] = mark_at_junction(edges[eid], label, junction.junction_id)
         if assignment_is_legal(junction.kind, tuple(marks)):
             return True
     return False
 
 
-def waltz_filter(edges: dict[str, Edge], junctions: dict[Point, Junction]) -> tuple[dict[str, set[str]], bool]:
+def waltz_filter(edges: dict[str, Edge], junctions: dict[str, Junction]) -> tuple[dict[str, set[str]], bool]:
     domains: dict[str, set[str]] = {edge_id: set(LABELS) for edge_id in edges}
     changed = True
 
     while changed:
         changed = False
-        for junction in sorted(junctions.values(), key=lambda j: j.point):
+        for junction in sorted(junctions.values(), key=lambda j: j.junction_id):
             for edge_id in junction.incident_edges:
                 current_domain = domains[edge_id]
                 supported = {
@@ -239,7 +185,7 @@ def print_result(edges: dict[str, Edge], domains: dict[str, set[str]], consisten
 
 
 def main() -> None:
-    edges, junctions = build_graph(EXAMPLE_GRID)
+    edges, junctions = build_graph(EXAMPLE_EDGES, EXAMPLE_JUNCTIONS)
     domains, consistent = waltz_filter(edges, junctions)
     print_result(edges, domains, consistent)
 
